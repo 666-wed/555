@@ -101,28 +101,22 @@ function run(sql, params = []) {
 }
 
 if (!queryOne('SELECT id FROM children WHERE id = 1')) {
-  const now = Date.now()
   run(
     'INSERT INTO children (id, name, age, stage, interests, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [1, '林予安', 15, '青春期', JSON.stringify(stageProfiles.青春期.interests), new Date().toISOString()]
-  )
-  db.run(
-    'INSERT INTO checkins (child_id, stage, mood, energy, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [1, '青春期', '平静', 3, '放学回来比平时安静，主动把耳机摘下来吃了晚饭。', new Date(now - 86400000).toISOString()]
-  )
-  db.run(
-    'INSERT INTO checkins (child_id, stage, mood, energy, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [1, '青春期', '疲惫', 2, '写作业到很晚，中间出来倒了一杯水，没有催促。', new Date(now - 2 * 86400000).toISOString()]
-  )
-  db.run(
-    'INSERT INTO checkins (child_id, stage, mood, energy, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [1, '青春期', '开心', 4, '和朋友打完球回来，路上分享了一首歌。', new Date(now - 3 * 86400000).toISOString()]
-  )
-  db.run(
-    'INSERT INTO conversations (child_id, stage, topic, message, created_at) VALUES (?, ?, ?, ?, ?)',
-    [1, '青春期', '周末安排', '这周有没有什么时刻，让你觉得自己做得不错？', new Date(now - 4 * 86400000).toISOString()]
+    [1, '我的孩子', 10, '学龄期', JSON.stringify(stageProfiles.学龄期.interests), new Date().toISOString()]
   )
   persist()
+}
+
+// 一次性清理旧的模拟数据
+{
+  const child = queryOne('SELECT name FROM children WHERE id = 1')
+  if (child && child.name === '林予安') {
+    db.run("UPDATE children SET name = '我的孩子', age = 10, stage = '学龄期', interests = ? WHERE id = 1", [JSON.stringify(stageProfiles.学龄期.interests)])
+    db.run("DELETE FROM checkins WHERE child_id = 1 AND note IN ('放学回来比平时安静，主动把耳机摘下来吃了晚饭。', '写作业到很晚，中间出来倒了一杯水，没有催促。', '和朋友打完球回来，路上分享了一首歌。')")
+    db.run("DELETE FROM conversations WHERE child_id = 1 AND message = '这周有没有什么时刻，让你觉得自己做得不错？'")
+    persist()
+  }
 }
 
 const app = express()

@@ -531,11 +531,12 @@ function inferMood(faceCategories, bodyLandmarks) {
       signals: motionScore > 0.18 ? ['身体动作较频繁', '建议先问问发生了什么'] : ['表情暂不清晰', '可以调整光线或镜头距离']
     }
   }
-  if (smile > 0.45) return { label: '开心', confidence: Math.min(0.92, 0.55 + smile * 0.4), summary: '面部表情较舒展，像是有一些轻松的时刻。', signals: ['嘴角上扬', motionScore > 0.12 ? '动作较活跃' : '身体状态平稳'] }
-  if (browDown > 0.5 && eyeSquint > 0.34 && motionScore > 0.1) return { label: '紧张', confidence: Math.min(0.86, 0.5 + browDown * 0.35), summary: '眉眼和动作都比较用力，可能正处在压力中。', signals: ['眉眼收紧', '动作变化较明显'] }
-  if (frown > 0.34 && motionScore < 0.12) return { label: '低落', confidence: Math.min(0.82, 0.48 + frown * 0.5), summary: '表情偏收拢、动作较少，可以给他一点安静的陪伴。', signals: ['嘴角下压', '动作幅度较小'] }
-  if ((blink > 0.48 || jawOpen > 0.34) && motionScore < 0.1) return { label: '疲惫', confidence: 0.63, summary: '眼部活动和动作都比较少，可能需要先休息一下。', signals: ['眼部活动较多', '身体动作偏少'] }
-  return { label: '平静', confidence: Math.min(0.82, 0.56 + (1 - motionScore) * 0.2), summary: '当前状态比较平稳，可以从轻松的话题开始。', signals: ['没有明显的极端表情', '身体状态相对稳定'] }
+  if (smile > 0.22) return { label: '开心', confidence: Math.min(0.92, 0.5 + smile * 0.45), summary: '面部表情较舒展，像是有一些轻松的时刻。', signals: ['嘴角上扬', motionScore > 0.12 ? '动作较活跃' : '身体状态平稳'] }
+  if (browDown > 0.28 && eyeSquint > 0.18 && motionScore > 0.06) return { label: '紧张', confidence: Math.min(0.86, 0.45 + browDown * 0.4), summary: '眉眼和动作都比较用力，可能正处在压力中。', signals: ['眉眼收紧', '动作变化较明显'] }
+  if (frown > 0.18) return { label: '低落', confidence: Math.min(0.82, 0.42 + frown * 0.55), summary: '表情偏收拢，可以给他一点安静的陪伴。', signals: ['嘴角下压', motionScore < 0.1 ? '动作幅度较小' : '有些小动作'] }
+  if ((blink > 0.35 || jawOpen > 0.22) && motionScore < 0.08) return { label: '疲惫', confidence: 0.6, summary: '眼部活动和动作都比较少，可能需要先休息一下。', signals: ['眼部活动较多', '身体动作偏少'] }
+  if (motionScore > 0.15) return { label: '烦躁', confidence: Math.min(0.78, 0.45 + motionScore * 0.6), summary: '捕捉到较明显的动作变化，可能有些坐不住。', signals: ['身体动作较频繁', '建议先问问发生了什么'] }
+  return { label: '平静', confidence: Math.min(0.72, 0.45 + (1 - motionScore) * 0.15), summary: '当前状态比较平稳，可以从轻松的话题开始。', signals: ['没有明显的极端表情', '身体状态相对稳定'] }
 }
 
 function analyzeCameraFrame(timestamp) {
