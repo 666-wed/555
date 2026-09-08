@@ -388,7 +388,8 @@ function getAIProvider() {
 }
 
 // 统一调用 AI 对话接口，返回纯文本回复
-async function chatCompletion({ prompt, temperature = 0.65, maxTokens = 700 }) {
+// 支持 prompt（单轮）或 messages（多轮，含 system/user/assistant）
+async function chatCompletion({ prompt, messages, temperature = 0.65, maxTokens = 700 }) {
   const ai = getAIProvider()
   if (!ai) {
     const err = new Error('NO_AI_KEY')
@@ -396,6 +397,7 @@ async function chatCompletion({ prompt, temperature = 0.65, maxTokens = 700 }) {
     throw err
   }
   const { apiUrl, apiKey, model, provider } = ai
+  const payloadMessages = messages || [{ role: 'user', content: prompt }]
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
@@ -404,7 +406,7 @@ async function chatCompletion({ prompt, temperature = 0.65, maxTokens = 700 }) {
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: payloadMessages,
       temperature,
       max_tokens: maxTokens
     })
@@ -508,6 +510,39 @@ app.post('/api/camera/analyze', requireAuth, async (req, res) => {
       return res.status(503).json({ message: '请先在 Render 环境变量配置 SILICONFLOW_API_KEY 或 DEEPSEEK_API_KEY' })
     }
     res.status(502).json({ message: 'AI 分析暂时不可用', detail: String(error.message).slice(0, 500) })
+  }
+})
+
+// AI 多轮对话：接收用户消息和历史记录，返回 AI 回复
+app.post('/api/chat', requireAuth, async (req, res) => {
+  const message = String(req.body?.message || '').trim().slice(0, 2000)
+  const history = Array.isArray(req.body?.history) ? req.body.history.slice(-20) : []
+  if (!message) return res.status(400).json({ message: '请输入消息内容' })
+
+  try {
+    const systemPrompt = [
+      '你是「童心小守护」的 AI 助手，一位温和、专业的亲子沟通顾问。',
+      '你的使命是帮助家长更好地理解孩子、改善亲子关系。',
+      '请始终用温暖、共情、不评判的语气回应。',
+      '回答要简洁实用，优先给出可操作的建议或可以直接使用的话术。',
+      '当用户分享情绪或困扰时，先共情，再给建议。'
+    ].join('\n')
+
+    const messages = [{ role: 'system', content: systemPrompt }]
+    for (const h of history) {
+      const role = h.role === 'assistant' ? 'assistant' : 'user'
+      messages.push({ role, content: String(h.content || '').slice(0, 1000) })
+    }
+    messages.push({ role: 'user', content: message })
+
+    const reply = await chatCompletion({ messages, temperature: 0.7, maxTokens: 800 })
+    res.json({ reply })
+  } catch (error) {
+    console.error('[童心小守护] AI 对话失败', error.message)
+    if (error.code === 'NO_AI_KEY') {
+      return res.status(503).json({ message: '请先在 Render 环境变量配置 SILICONFLOW_API_KEY 或 DEEPSEEK_API_KEY' })
+    }
+    res.status(502).json({ message: 'AI 暂时无法回复，请稍后再试', detail: String(error.message).slice(0, 500) })
   }
 })
 

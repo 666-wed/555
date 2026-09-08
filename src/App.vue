@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   ArrowUpRight,
   BookOpen,
@@ -20,6 +20,7 @@ import {
   LogOut,
   Mail,
   Meh,
+  MessageCircle,
   MessageCircleHeart,
   Moon,
   NotebookPen,
@@ -101,6 +102,15 @@ const analysis = ref({
 const aiAnalysis = ref(null)
 const aiLoading = ref(false)
 const aiError = ref('')
+
+// AI 对话
+const chatMessages = ref([
+  { role: 'assistant', content: '你好呀，我是童心小守护的 AI 助手。无论是关于孩子的情绪、沟通，还是你自己的困扰，都可以和我聊聊。' }
+])
+const chatInput = ref('')
+const chatLoading = ref(false)
+const chatError = ref('')
+const chatScrollRef = ref(null)
 
 let mediaStream = null
 let faceLandmarker = null
@@ -595,6 +605,52 @@ async function copyAIResult(text) {
   }
 }
 
+async function sendChatMessage() {
+  const text = chatInput.value.trim()
+  if (!text || chatLoading.value) return
+  chatError.value = ''
+  chatMessages.value.push({ role: 'user', content: text })
+  chatInput.value = ''
+  chatLoading.value = true
+  // 发送历史记录（不含当前这条，因为已 push）
+  const history = chatMessages.value.slice(0, -1).map((m) => ({ role: m.role, content: m.content }))
+  try {
+    const response = await authFetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, history })
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || 'AI 回复失败')
+    chatMessages.value.push({ role: 'assistant', content: data.reply })
+  } catch (error) {
+    chatError.value = error.message || 'AI 暂时无法回复，请稍后再试'
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+function clearChat() {
+  chatMessages.value = [
+    { role: 'assistant', content: '你好呀，我是童心小守护的 AI 助手。无论是关于孩子的情绪、沟通，还是你自己的困扰，都可以和我聊聊。' }
+  ]
+  chatError.value = ''
+}
+
+function scrollChatToBottom() {
+  if (chatScrollRef.value) {
+    chatScrollRef.value.scrollTop = chatScrollRef.value.scrollHeight
+  }
+}
+
+watch(
+  () => chatMessages.value.length,
+  async () => {
+    await nextTick()
+    scrollChatToBottom()
+  }
+)
+
 async function saveCameraObservation() {
   const observation = `镜头辅助观察：${analysis.value.summary}（${analysis.value.signals.join('、')}）`
   try {
@@ -732,6 +788,10 @@ onMounted(async () => {
         <button :class="{ active: activeSection === 'language' }" @click="activeSection = 'language'">
           <Languages :size="18" />
           <span>语言助手</span>
+        </button>
+        <button :class="{ active: activeSection === 'chat' }" @click="activeSection = 'chat'">
+          <MessageCircle :size="18" />
+          <span>AI 对话</span>
         </button>
         <button :class="{ active: activeSection === 'camera' }" @click="activeSection = 'camera'">
           <Camera :size="18" />
@@ -1099,6 +1159,51 @@ onMounted(async () => {
             </aside>
           </div>
           <div class="camera-guidance"><div><span class="section-kicker">下一步</span><h2>把推测变成交流</h2></div><p>“我刚刚注意到你今天好像有点{{ analysis.label === '平静' ? '安静' : analysis.label }}，你想让我陪你坐一会儿吗？”</p><button class="text-button" @click="activeSection = 'overview'">去选一句开场白 <ArrowUpRight :size="16" /></button></div>
+        </section>
+
+        <section v-else-if="activeSection === 'chat'" class="page-section chat-page">
+          <div class="page-title-row">
+            <div>
+              <p class="eyebrow">随时聊聊，关于孩子，也关于你自己</p>
+              <h1>AI 对话</h1>
+            </div>
+            <button class="secondary-button compact" @click="clearChat"><Trash2 :size="15" /> 清空对话</button>
+          </div>
+          <div class="chat-window">
+            <div ref="chatScrollRef" class="chat-messages">
+              <div
+                v-for="(msg, idx) in chatMessages"
+                :key="idx"
+                class="chat-bubble-wrap"
+                :class="msg.role === 'user' ? 'is-user' : 'is-ai'"
+              >
+                <div class="chat-avatar">
+                  <component :is="msg.role === 'user' ? User : Sparkles" :size="16" />
+                </div>
+                <div class="chat-bubble">
+                  <span class="chat-bubble-text">{{ msg.content }}</span>
+                </div>
+              </div>
+              <div v-if="chatLoading" class="chat-bubble-wrap is-ai">
+                <div class="chat-avatar"><Sparkles :size="16" /></div>
+                <div class="chat-bubble chat-typing">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+            <div v-if="chatError" class="chat-error">{{ chatError }}</div>
+            <form class="chat-input-bar" @submit.prevent="sendChatMessage">
+              <input
+                v-model="chatInput"
+                type="text"
+                placeholder="说说你现在的感受或想问的问题…"
+                :disabled="chatLoading"
+              />
+              <button type="submit" class="primary-button chat-send" :disabled="!chatInput.trim() || chatLoading">
+                <Send :size="16" />
+              </button>
+            </form>
+          </div>
         </section>
 
         <section v-else class="page-section">
