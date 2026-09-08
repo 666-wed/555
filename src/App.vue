@@ -184,7 +184,15 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || ''
+// API 地址解析：
+// 1) 构建期显式配置 VITE_API_BASE 时优先使用；
+// 2) 本地开发（localhost）走相对路径，由 Vite 代理到本地后端；
+// 3) 线上（Vercel 等独立前端域名）直连 Render 后端，避免 Vercel 外部重写触发 307 重定向——
+//    微信 X5 内核会把跨域 307 提升为整页跳转，导致页面跳到 Render；
+// 4) 页面本身就在 Render 上时，直连地址等价同源，无跨域问题。
+const RENDER_API = 'https://five55-df41.onrender.com'
+const API_BASE = import.meta.env.VITE_API_BASE
+  ?? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : RENDER_API)
 
 async function authFetch(url, options = {}) {
   const response = await fetch(`${API_BASE}${url}`, {
