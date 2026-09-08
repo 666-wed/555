@@ -369,9 +369,26 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
   if (!allowedLanguages.has(source) || !allowedLanguages.has(target)) {
     return res.status(400).json({ message: '暂不支持这组语言' })
   }
-  const aiKey = process.env.DEEPSEEK_API_KEY || process.env.ERNIE_API_KEY
-  if (!aiKey) {
-    return res.status(503).json({ message: '请先在 Render 环境变量配置 DEEPSEEK_API_KEY' })
+  // AI 提供商优先级：硅基流动(免费) > DeepSeek > 文心
+  let apiUrl, apiKey, model, provider
+  if (process.env.SILICONFLOW_API_KEY) {
+    apiUrl = 'https://api.siliconflow.cn/v1/chat/completions'
+    apiKey = process.env.SILICONFLOW_API_KEY
+    model = process.env.SILICONFLOW_MODEL || 'Qwen/Qwen2.5-7B-Instruct'
+    provider = 'siliconflow'
+  } else if (process.env.DEEPSEEK_API_KEY) {
+    apiUrl = 'https://api.deepseek.com/chat/completions'
+    apiKey = process.env.DEEPSEEK_API_KEY
+    model = 'deepseek-chat'
+    provider = 'deepseek'
+  } else if (process.env.ERNIE_API_KEY) {
+    apiUrl = 'https://qianfan.baidubce.com/v2/chat/completions'
+    apiKey = process.env.ERNIE_API_KEY
+    model = process.env.ERNIE_MODEL || 'ernie-speed-128k'
+    provider = 'ernie'
+  }
+  if (!apiKey) {
+    return res.status(503).json({ message: '请先在 Render 环境变量配置 SILICONFLOW_API_KEY 或 DEEPSEEK_API_KEY' })
   }
   try {
     const prompt = [
@@ -384,14 +401,14 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
       '',
       `用户原话：${text}`
     ].join('\n')
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${aiKey}`
+        Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.65,
         max_tokens: 700
@@ -399,7 +416,7 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
     })
     if (!response.ok) {
       const errText = await response.text().catch(() => '')
-      throw new Error(`deepseek returned ${response.status}: ${errText.slice(0, 200)}`)
+      throw new Error(`${provider} returned ${response.status}: ${errText.slice(0, 200)}`)
     }
     const data = await response.json()
     const reply = String(data?.choices?.[0]?.message?.content || '').trim()
