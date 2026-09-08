@@ -171,6 +171,28 @@ function isValidEmail(email) {
 }
 
 async function deliverVerificationCode(email, code) {
+  // 优先使用 Resend HTTP API（443 端口，云平台友好）
+  if (process.env.RESEND_API_KEY) {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: process.env.SMTP_FROM || 'onboarding@resend.dev',
+        to: email,
+        subject: '童心小守护登录验证码',
+        text: `你的童心小守护登录验证码是 ${code}，10分钟内有效。`
+      })
+    })
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '')
+      throw new Error(`resend api ${resp.status}: ${errText.slice(0, 300)}`)
+    }
+    return { sent: true }
+  }
+  // 兼容旧 SMTP 配置（云平台通常不支持，仅本地用）
   if (process.env.SMTP_HOST) {
     const nodemailer = await import('nodemailer')
     const transporter = nodemailer.default.createTransport({
