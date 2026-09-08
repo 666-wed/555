@@ -128,8 +128,12 @@ if (!queryOne('SELECT id FROM children WHERE id = 1')) {
 const app = express()
 app.use(cors({
   origin: (origin, callback) => {
-    // 允许同源（Vercel rewrite）、Vercel 域名、本地开发
-    if (!origin || /^https:\/\/.*\.vercel\.app$/.test(origin) || origin === process.env.FRONTEND_URL || /^http:\/\/localhost:\d+$/.test(origin)) {
+    // 允许同源（一体化部署/Render）、Vercel 域名、FRONTEND_URL、本地开发
+    if (!origin
+      || /^https:\/\/.*\.onrender\.com$/.test(origin)
+      || /^https:\/\/.*\.vercel\.app$/.test(origin)
+      || origin === process.env.FRONTEND_URL
+      || /^http:\/\/localhost:\d+$/.test(origin)) {
       callback(null, true)
     } else {
       callback(new Error('Not allowed by CORS'))
