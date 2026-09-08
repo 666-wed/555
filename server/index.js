@@ -103,7 +103,7 @@ function run(sql, params = []) {
 if (!queryOne('SELECT id FROM children WHERE id = 1')) {
   run(
     'INSERT INTO children (id, name, age, stage, interests, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [1, '我的孩子', 10, '学龄期', JSON.stringify(stageProfiles.学龄期.interests), new Date().toISOString()]
+    [1, '我的孩子', 10, '小学阶段', JSON.stringify(stageProfiles['小学阶段'].interests), new Date().toISOString()]
   )
   persist()
 }
@@ -112,7 +112,7 @@ if (!queryOne('SELECT id FROM children WHERE id = 1')) {
 {
   const child = queryOne('SELECT name FROM children WHERE id = 1')
   if (child && child.name === '林予安') {
-    db.run("UPDATE children SET name = '我的孩子', age = 10, stage = '学龄期', interests = ? WHERE id = 1", [JSON.stringify(stageProfiles.学龄期.interests)])
+    db.run("UPDATE children SET name = '我的孩子', age = 10, stage = '小学阶段', interests = ? WHERE id = 1", [JSON.stringify(stageProfiles['小学阶段'].interests)])
     db.run("DELETE FROM checkins WHERE child_id = 1 AND note IN ('放学回来比平时安静，主动把耳机摘下来吃了晚饭。', '写作业到很晚，中间出来倒了一杯水，没有催促。', '和朋友打完球回来，路上分享了一首歌。')")
     db.run("DELETE FROM conversations WHERE child_id = 1 AND message = '这周有没有什么时刻，让你觉得自己做得不错？'")
     persist()
