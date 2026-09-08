@@ -412,7 +412,7 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
     })
   } catch (error) {
     console.error('[童心小守护] 免费 AI 服务请求失败', error.message)
-    res.status(502).json({ message: '免费 AI 服务暂时不可用，请检查 ERNIE_API_KEY 或稍后重试' })
+    res.status(502).json({ message: '免费 AI 服务暂时不可用', detail: String(error.message).slice(0, 500) })
   }
 })
 
