@@ -233,7 +233,8 @@ app.post('/api/auth/request-code', async (req, res) => {
       devCode: delivery.devCode
     })
   } catch (error) {
-    res.status(500).json({ message: '验证码发送失败，请检查邮箱服务配置' })
+    console.error('[童心小守护] 验证码发送失败', email, error.message)
+    res.status(500).json({ message: '验证码发送失败', detail: String(error.message).slice(0, 500) })
   }
 })
 
