@@ -306,7 +306,8 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
   if (!allowedLanguages.has(source) || !allowedLanguages.has(target)) {
     return res.status(400).json({ message: '暂不支持这组语言' })
   }
-  if (!process.env.ERNIE_API_KEY) {
+  const ernieKey = process.env.ERNIE_API_KEY
+  if (!ernieKey) {
     return res.status(503).json({ message: '请先在 .env 中配置 ERNIE_API_KEY（百度千帆 console.bce.baidu.com）' })
   }
   try {
@@ -325,7 +326,7 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.ERNIE_API_KEY}`
+        Authorization: `Bearer ${ernieKey}`
       },
       body: JSON.stringify({
         messages: [{ role: 'user', content: prompt }],
