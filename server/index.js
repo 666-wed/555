@@ -358,6 +358,67 @@ function decodeHtmlEntities(value) {
     .replace(/&gt;/g, '>')
 }
 
+// AI 提供商优先级：硅基流动(免费) > DeepSeek > 文心
+function getAIProvider() {
+  if (process.env.SILICONFLOW_API_KEY) {
+    return {
+      apiUrl: 'https://api.siliconflow.cn/v1/chat/completions',
+      apiKey: process.env.SILICONFLOW_API_KEY,
+      model: process.env.SILICONFLOW_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
+      provider: 'siliconflow'
+    }
+  }
+  if (process.env.DEEPSEEK_API_KEY) {
+    return {
+      apiUrl: 'https://api.deepseek.com/chat/completions',
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      model: 'deepseek-chat',
+      provider: 'deepseek'
+    }
+  }
+  if (process.env.ERNIE_API_KEY) {
+    return {
+      apiUrl: 'https://qianfan.baidubce.com/v2/chat/completions',
+      apiKey: process.env.ERNIE_API_KEY,
+      model: process.env.ERNIE_MODEL || 'ernie-speed-128k',
+      provider: 'ernie'
+    }
+  }
+  return null
+}
+
+// 统一调用 AI 对话接口，返回纯文本回复
+async function chatCompletion({ prompt, temperature = 0.65, maxTokens = 700 }) {
+  const ai = getAIProvider()
+  if (!ai) {
+    const err = new Error('NO_AI_KEY')
+    err.code = 'NO_AI_KEY'
+    throw err
+  }
+  const { apiUrl, apiKey, model, provider } = ai
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature,
+      max_tokens: maxTokens
+    })
+  })
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '')
+    throw new Error(`${provider} returned ${response.status}: ${errText.slice(0, 200)}`)
+  }
+  const data = await response.json()
+  const reply = String(data?.choices?.[0]?.message?.content || '').trim()
+  if (!reply) throw new Error(`empty AI response: ${JSON.stringify(data).slice(0, 200)}`)
+  return reply
+}
+
 app.post('/api/language/assist', requireAuth, async (req, res) => {
   const text = String(req.body?.text || '').trim().slice(0, 1000)
   const requestedSource = String(req.body?.source || 'auto')
@@ -368,27 +429,6 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
   if (!text) return res.status(400).json({ message: '请输入需要翻译的内容' })
   if (!allowedLanguages.has(source) || !allowedLanguages.has(target)) {
     return res.status(400).json({ message: '暂不支持这组语言' })
-  }
-  // AI 提供商优先级：硅基流动(免费) > DeepSeek > 文心
-  let apiUrl, apiKey, model, provider
-  if (process.env.SILICONFLOW_API_KEY) {
-    apiUrl = 'https://api.siliconflow.cn/v1/chat/completions'
-    apiKey = process.env.SILICONFLOW_API_KEY
-    model = process.env.SILICONFLOW_MODEL || 'Qwen/Qwen2.5-7B-Instruct'
-    provider = 'siliconflow'
-  } else if (process.env.DEEPSEEK_API_KEY) {
-    apiUrl = 'https://api.deepseek.com/chat/completions'
-    apiKey = process.env.DEEPSEEK_API_KEY
-    model = 'deepseek-chat'
-    provider = 'deepseek'
-  } else if (process.env.ERNIE_API_KEY) {
-    apiUrl = 'https://qianfan.baidubce.com/v2/chat/completions'
-    apiKey = process.env.ERNIE_API_KEY
-    model = process.env.ERNIE_MODEL || 'ernie-speed-128k'
-    provider = 'ernie'
-  }
-  if (!apiKey) {
-    return res.status(503).json({ message: '请先在 Render 环境变量配置 SILICONFLOW_API_KEY 或 DEEPSEEK_API_KEY' })
   }
   try {
     const prompt = [
@@ -401,35 +441,73 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
       '',
       `用户原话：${text}`
     ].join('\n')
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.65,
-        max_tokens: 700
-      })
-    })
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '')
-      throw new Error(`${provider} returned ${response.status}: ${errText.slice(0, 200)}`)
-    }
-    const data = await response.json()
-    const reply = String(data?.choices?.[0]?.message?.content || '').trim()
-    if (!reply) throw new Error(`empty AI response: ${JSON.stringify(data).slice(0, 200)}`)
-    res.json({
-      reply,
-      source,
-      target,
-      tone
-    })
+    const reply = await chatCompletion({ prompt, temperature: 0.65, maxTokens: 700 })
+    res.json({ reply, source, target, tone })
   } catch (error) {
     console.error('[童心小守护] 免费 AI 服务请求失败', error.message)
+    if (error.code === 'NO_AI_KEY') {
+      return res.status(503).json({ message: '请先在 Render 环境变量配置 SILICONFLOW_API_KEY 或 DEEPSEEK_API_KEY' })
+    }
     res.status(502).json({ message: '免费 AI 服务暂时不可用', detail: String(error.message).slice(0, 500) })
+  }
+})
+
+// 情绪镜头深度分析：接收前端 MediaPipe 检测到的情绪数据，调用 AI 生成解读与沟通建议
+app.post('/api/camera/analyze', requireAuth, async (req, res) => {
+  const stage = String(req.body?.stage || '青春期').slice(0, 20)
+  const mood = String(req.body?.mood || '').slice(0, 20)
+  const confidence = Math.max(0, Math.min(1, Number(req.body?.confidence) || 0))
+  const signals = Array.isArray(req.body?.signals) ? req.body.signals.slice(0, 8).map((s) => String(s).slice(0, 80)) : []
+  const summary = String(req.body?.summary || '').slice(0, 200)
+  if (!mood) return res.status(400).json({ message: 'mood is required' })
+
+  try {
+    const prompt = [
+      '你是一位温和、专业的亲子心理咨询师，擅长通过非语言信号理解孩子。',
+      '用户通过摄像头捕捉到孩子的表情与动作特征，得到以下辅助观察结果：',
+      `- 推断情绪：${mood}`,
+      `- 置信度：${Math.round(confidence * 100)}%`,
+      `- 观察摘要：${summary || '无'}`,
+      `- 捕捉到的信号：${signals.length ? signals.join('、') : '无明显信号'}`,
+      `- 孩子所处成长阶段：${stage}`,
+      '',
+      '请基于以上信息，给出一份温和、可操作的分析。要求：',
+      '1. 先说明这只是辅助观察，真正的情绪需要在真实交流中确认（避免让家长过度依赖）。',
+      '2. 用 1-2 句话解读这个情绪可能意味着什么，语气要共情、不评判。',
+      '3. 给出 3 条具体的沟通建议，每条不超过 30 字，要可直接使用。',
+      '4. 最后给出一句温暖的开场白，适合家长此时对孩子说。',
+      '',
+      '请严格按以下格式返回，不要添加 Markdown 标题或编号前缀：',
+      '解读：',
+      '建议1：',
+      '建议2：',
+      '建议3：',
+      '开场白：'
+    ].join('\n')
+
+    const reply = await chatCompletion({ prompt, temperature: 0.7, maxTokens: 600 })
+
+    // 解析结构化输出
+    const interpretation = (reply.match(/解读[：:]\s*([\s\S]*?)(?=建议1[：:]|$)/)?.[1] || '').trim()
+    const suggestion1 = (reply.match(/建议1[：:]\s*([^\n]*)/)?.[1] || '').trim()
+    const suggestion2 = (reply.match(/建议2[：:]\s*([^\n]*)/)?.[1] || '').trim()
+    const suggestion3 = (reply.match(/建议3[：:]\s*([^\n]*)/)?.[1] || '').trim()
+    const opener = (reply.match(/开场白[：:]\s*([\s\S]*)/)?.[1] || '').trim()
+
+    const suggestions = [suggestion1, suggestion2, suggestion3].filter(Boolean)
+
+    res.json({
+      interpretation: interpretation || reply,
+      suggestions: suggestions.length ? suggestions : ['先安静地陪在他身边，不急着问为什么。', '用具体的小事开口，比如“今天晚饭想吃什么？”', '告诉他“不管怎样，我都在”。'],
+      opener: opener || '我在这里，你想说的时候我都听着。',
+      raw: reply
+    })
+  } catch (error) {
+    console.error('[童心小守护] 情绪镜头 AI 分析失败', error.message)
+    if (error.code === 'NO_AI_KEY') {
+      return res.status(503).json({ message: '请先在 Render 环境变量配置 SILICONFLOW_API_KEY 或 DEEPSEEK_API_KEY' })
+    }
+    res.status(502).json({ message: 'AI 分析暂时不可用', detail: String(error.message).slice(0, 500) })
   }
 })
 

@@ -98,6 +98,9 @@ const analysis = ref({
   summary: '开启镜头，让观察多一个角度。',
   signals: ['视频只在本机处理', '结果需要结合真实交流确认']
 })
+const aiAnalysis = ref(null)
+const aiLoading = ref(false)
+const aiError = ref('')
 
 let mediaStream = null
 let faceLandmarker = null
@@ -547,7 +550,49 @@ function stopCamera() {
   previousPose = null
   previousPixels = null
   motionScore = 0
+  aiAnalysis.value = null
+  aiError.value = ''
   if (cameraStatus.value !== 'error') cameraStatus.value = 'idle'
+}
+
+async function analyzeWithAI() {
+  if (aiLoading.value || !cameraOpen.value) return
+  aiLoading.value = true
+  aiError.value = ''
+  try {
+    const response = await authFetch('/api/camera/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stage: selectedStage.value,
+        mood: analysis.value.label,
+        confidence: analysis.value.confidence,
+        summary: analysis.value.summary,
+        signals: analysis.value.signals
+      })
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || 'AI 分析失败')
+    aiAnalysis.value = {
+      interpretation: data.interpretation,
+      suggestions: data.suggestions,
+      opener: data.opener
+    }
+  } catch (error) {
+    aiError.value = error.message || 'AI 分析暂时不可用，请稍后再试'
+    aiAnalysis.value = null
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+async function copyAIResult(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast('已复制到剪贴板')
+  } catch (error) {
+    showToast('复制失败，请手动选择文字')
+  }
 }
 
 async function saveCameraObservation() {
@@ -1018,6 +1063,39 @@ onMounted(async () => {
               <div class="analysis-divider"></div>
               <div class="analysis-note"><BrainCircuit :size="17" /><span>{{ modelStatus === 'ready' ? '表情 + 姿态模型已就绪' : modelStatus === 'loading' ? '正在加载观察模型…' : '动作观察模式' }}</span></div>
               <button class="primary-button save-analysis-button" :disabled="!cameraOpen || analysis.confidence === 0" @click="saveCameraObservation"><NotebookPen :size="16" /> 保存这次观察</button>
+
+              <div class="ai-analysis-block">
+                <div class="analysis-divider"></div>
+                <div class="ai-analysis-header">
+                  <div><span class="section-kicker">AI 深度分析</span><h3>让 AI 帮你读懂这一刻</h3></div>
+                  <Sparkles :size="18" class="ai-sparkle" />
+                </div>
+                <button class="secondary-button ai-analyze-button" :disabled="!cameraOpen || aiLoading" @click="analyzeWithAI">
+                  <Sparkles :size="16" />
+                  {{ aiLoading ? 'AI 正在分析…' : '调用 AI 深度分析' }}
+                </button>
+
+                <div v-if="aiError" class="ai-error">{{ aiError }}</div>
+
+                <div v-if="aiAnalysis" class="ai-result">
+                  <div class="ai-interpretation">
+                    <HeartHandshake :size="16" />
+                    <p>{{ aiAnalysis.interpretation }}</p>
+                  </div>
+                  <div class="ai-suggestions">
+                    <span class="ai-suggestions-label">沟通建议</span>
+                    <div v-for="(sug, idx) in aiAnalysis.suggestions" :key="idx" class="ai-suggestion">
+                      <span class="ai-suggestion-dot">{{ idx + 1 }}</span>
+                      <span>{{ sug }}</span>
+                    </div>
+                  </div>
+                  <div class="ai-opener">
+                    <span class="ai-opener-label">可以这样开口</span>
+                    <p class="ai-opener-text">“{{ aiAnalysis.opener }}”</p>
+                    <button class="copy-button ai-copy" @click="copyAIResult(aiAnalysis.opener)"><Copy :size="13" />复制这句话</button>
+                  </div>
+                </div>
+              </div>
             </aside>
           </div>
           <div class="camera-guidance"><div><span class="section-kicker">下一步</span><h2>把推测变成交流</h2></div><p>“我刚刚注意到你今天好像有点{{ analysis.label === '平静' ? '安静' : analysis.label }}，你想让我陪你坐一会儿吗？”</p><button class="text-button" @click="activeSection = 'overview'">去选一句开场白 <ArrowUpRight :size="16" /></button></div>

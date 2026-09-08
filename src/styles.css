@@ -216,3 +216,25 @@ textarea::placeholder { color: #b4b7b0; }
 .auth-switch { text-align: center; margin-top: 10px; font-size: 13px; color: #6b7280; }
 .auth-switch button { background: none; border: none; color: #5b8def; cursor: pointer; padding: 0 2px; font-size: 13px; font-weight: 600; }
 .auth-switch button:hover { text-decoration: underline; }
+
+/* 情绪镜头 - AI 深度分析区块 */
+.ai-analysis-block { margin-top: 6px; }
+.ai-analysis-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.ai-analysis-header .section-kicker { margin-bottom: 4px; color: #b07d6f; }
+.ai-analysis-header h3 { margin: 0; font-size: 15px; color: var(--ink); }
+.ai-sparkle { color: var(--coral); flex-shrink: 0; }
+.ai-analyze-button { width: 100%; justify-content: center; }
+.ai-analyze-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.ai-error { margin-top: 12px; padding: 10px 12px; border-radius: 7px; background: #fdf0ee; color: #b85c4f; font-size: 12px; line-height: 1.6; }
+.ai-result { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; }
+.ai-interpretation { display: flex; align-items: flex-start; gap: 9px; padding: 12px 13px; border-radius: 9px; background: #f6f4ec; }
+.ai-interpretation svg { color: #c89b6e; flex-shrink: 0; margin-top: 1px; }
+.ai-interpretation p { margin: 0; color: #6b5f4f; font-size: 12px; line-height: 1.75; }
+.ai-suggestions { display: flex; flex-direction: column; gap: 8px; }
+.ai-suggestions-label, .ai-opener-label { color: #8b948c; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
+.ai-suggestion { display: flex; align-items: flex-start; gap: 9px; font-size: 12px; color: #5a665e; line-height: 1.6; }
+.ai-suggestion-dot { flex-shrink: 0; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: #eaf0e3; color: var(--sage-dark); font-size: 10px; font-weight: 700; }
+.ai-opener { padding: 13px; border-radius: 9px; background: #f1efe8; border: 1px dashed #d9d3c3; }
+.ai-opener-text { margin: 6px 0 8px; color: var(--ink); font-size: 13px; line-height: 1.7; font-weight: 500; }
+.ai-copy { color: var(--sage-dark); }
+.ai-copy svg { color: var(--sage); }
