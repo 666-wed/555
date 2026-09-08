@@ -369,9 +369,9 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
   if (!allowedLanguages.has(source) || !allowedLanguages.has(target)) {
     return res.status(400).json({ message: '暂不支持这组语言' })
   }
-  const ernieKey = process.env.ERNIE_API_KEY
-  if (!ernieKey) {
-    return res.status(503).json({ message: '请先在 .env 中配置 ERNIE_API_KEY（百度千帆 console.bce.baidu.com）' })
+  const aiKey = process.env.DEEPSEEK_API_KEY || process.env.ERNIE_API_KEY
+  if (!aiKey) {
+    return res.status(503).json({ message: '请先在 Render 环境变量配置 DEEPSEEK_API_KEY' })
   }
   try {
     const prompt = [
@@ -384,15 +384,14 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
       '',
       `用户原话：${text}`
     ].join('\n')
-    const modelPath = process.env.ERNIE_MODEL || 'ernie-speed-128k'
-    const response = await fetch('https://qianfan.baidubce.com/v2/chat/completions', {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${ernieKey}`
+        Authorization: `Bearer ${aiKey}`
       },
       body: JSON.stringify({
-        model: modelPath,
+        model: 'deepseek-chat',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.65,
         max_tokens: 700
@@ -400,7 +399,7 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
     })
     if (!response.ok) {
       const errText = await response.text().catch(() => '')
-      throw new Error(`ernie returned ${response.status}: ${errText.slice(0, 200)}`)
+      throw new Error(`deepseek returned ${response.status}: ${errText.slice(0, 200)}`)
     }
     const data = await response.json()
     const reply = String(data?.choices?.[0]?.message?.content || '').trim()
