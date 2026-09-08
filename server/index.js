@@ -385,16 +385,17 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
       `用户原话：${text}`
     ].join('\n')
     const modelPath = process.env.ERNIE_MODEL || 'ernie-speed-128k'
-    const response = await fetch(`https://qianfan.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/${modelPath}`, {
+    const response = await fetch('https://qianfan.baidubce.com/v2/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${ernieKey}`
       },
       body: JSON.stringify({
+        model: modelPath,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.65,
-        max_output_tokens: 700
+        max_tokens: 700
       })
     })
     if (!response.ok) {
@@ -402,8 +403,8 @@ app.post('/api/language/assist', requireAuth, async (req, res) => {
       throw new Error(`ernie returned ${response.status}: ${errText.slice(0, 200)}`)
     }
     const data = await response.json()
-    const reply = String(data?.result || '').trim()
-    if (!reply) throw new Error('empty AI response')
+    const reply = String(data?.choices?.[0]?.message?.content || '').trim()
+    if (!reply) throw new Error(`empty AI response: ${JSON.stringify(data).slice(0, 200)}`)
     res.json({
       reply,
       source,
